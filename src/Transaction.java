@@ -3,10 +3,15 @@ public class Transaction {
     private String receiver;
     private int amount;
 
-
-    public Transaction(String sender, String receiver, int amount) {
+    public void setSender(String sender) {
         this.sender = sender;
+    }
+
+    public void setReceiver(String receiver) {
         this.receiver = receiver;
+    }
+
+    public void setAmount(int amount) {
         this.amount = amount;
     }
 
