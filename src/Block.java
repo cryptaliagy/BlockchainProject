@@ -1,4 +1,5 @@
 import java.sql.Timestamp;
+import java.util.Iterator;
 
 public class Block {
     private int index;
@@ -28,7 +29,7 @@ public class Block {
                 index = Integer.valueOf(input);
                 break;
             case 1:
-                timestamp = Timestamp.valueOf(input);
+                timestamp = new Timestamp(Long.valueOf(input));
                 break;
             case 2:
                 transaction.setSender(input);
@@ -52,6 +53,12 @@ public class Block {
                 break;
         }
         line++;
+    }
+
+    public String[] dump() {
+        return new String[] {String.valueOf(index), String.valueOf(timestamp.getTime()),
+                transaction.getSender(), transaction.getReceiver(), String.valueOf(transaction.getAmount()),
+                nonce, hash };
     }
 
     // TODO: block validation logic
@@ -78,12 +85,36 @@ public class Block {
             System.err.println("This block already has all the transactions it can hold!");
             return;
         }
-        timestamp = new java.sql.Timestamp(System.currentTimeMillis());
+        timestamp = new Timestamp(System.currentTimeMillis());
         this.transaction = current;
+    }
+
+    public int getIndex() {
+        return index;
+    }
+
+    public long getTimeStamp() {
+        return timestamp.getTime();
+    }
+
+    public Transaction getTransaction() {
+        return transaction.copy();
+    }
+
+    public String getNonce() {
+        return nonce;
+    }
+
+    public String getPreviousHash() {
+        return previousHash;
     }
 
     public String getHash() {
         return hash;
+    }
+
+    public boolean equals(Block other) {
+        return toString().equals(other.toString());
     }
 
     public String toString() {

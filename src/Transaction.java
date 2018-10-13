@@ -3,6 +3,13 @@ public class Transaction {
     private String receiver;
     private int amount;
 
+    public Transaction() {}
+
+    public Transaction(String sender, String receiver, int amount) {
+        this.sender = sender;
+        this.receiver = receiver;
+        this.amount = amount;
+    }
     public void setSender(String sender) {
         this.sender = sender;
     }
@@ -25,6 +32,10 @@ public class Transaction {
 
     public int getAmount() {
         return amount;
+    }
+
+    public Transaction copy() {
+        return new Transaction(sender, receiver, amount);
     }
 
     public String toString() {
