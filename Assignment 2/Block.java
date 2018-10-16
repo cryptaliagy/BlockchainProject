@@ -27,13 +27,13 @@ public class Block {
         this.hash = hash;
     }
 
-    public boolean validate(String criteria) {
+    public boolean validate() {
         if (isValid != null) {
             return isValid;
         }
         if (hash != null) {
             try {
-                isValid = hash.equals(Sha1.hash(toString())) && hash.startsWith(criteria);
+                isValid = hash.equals(Sha1.hash(toString())) && hash.startsWith("00000");
             } catch (Exception e) {
                 isValid = false;
             }
@@ -44,7 +44,7 @@ public class Block {
                 while (true) {
                     nonce = makeNonce(nonceVal);
                     hash = Sha1.hash(toString());
-                    if (hash.startsWith(criteria)) {
+                    if (hash.startsWith("00000")) {
                         isValid = true;
                         break;
                     }
