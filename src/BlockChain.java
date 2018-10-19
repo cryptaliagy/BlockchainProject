@@ -1,12 +1,10 @@
-import com.sun.istack.internal.NotNull;
-
 import java.io.*;
 import java.util.*;
 
 public class BlockChain {
-    private ArrayList<Block> chain;
-    private HashMap<String, Integer> balances;
-    private Boolean isValid;
+    private ArrayList<Block> chain = new ArrayList<>();
+    private HashMap<String, Integer> balances = new HashMap<>();
+    private Boolean isValid = null;
     private LinkedList<String> errorLogs = new LinkedList<>();
 
     private static Properties properties = new Properties();
@@ -14,14 +12,10 @@ public class BlockChain {
     private static boolean STOP_LOAD_IF_INVALID;
     private static String FIRST_HASH;
     private static String CRITERIA;
+    private static String MINER_ID;
+    private static String GREETING;
 
-    public BlockChain() {
-        chain = new ArrayList<>();
-        balances = new HashMap<>();
-        isValid = null;
-    }
-
-    public static void config() {
+    private static void config() {
         InputStream reader = null;
 
         try {
@@ -30,20 +24,26 @@ public class BlockChain {
             STOP_LOAD_IF_INVALID = Boolean.valueOf(properties.getProperty("stop_load"));
             FIRST_HASH = properties.getProperty("first_hash");
             CRITERIA = properties.getProperty("criteria");
-        }
-        catch (IOException e) {
+            MINER_ID = properties.getProperty("miner_id");
+            GREETING = "\nHave a nice day!";
+        } catch (IOException e) {
             e.printStackTrace();
-        }
-        finally {
+        } finally {
             if (reader != null) {
                 try {
                     reader.close();
-                }
-                catch (IOException e) {
+                } catch (IOException e) {
                     e.printStackTrace();
                 }
             }
         }
+    }
+
+    private static String appendToFileName(String fileName, String toAppend) {
+        if (fileName == null || toAppend == null) throw new NullPointerException();
+
+        return fileName.substring(0, fileName.lastIndexOf(".")) + "_"
+                + toAppend + fileName.substring(fileName.lastIndexOf("."));
     }
 
 
@@ -153,7 +153,7 @@ public class BlockChain {
                 }
 
                 chain.add(block);
-                lastHash = Sha1.hash(block.toString());
+                lastHash = Sha1.hash(block.toString()); // make sure the hash is the actual, not expected
                 lastIndex = index;
                 lastTime = timeStamp;
             } catch (Exception e) { // invalid blockchain
@@ -165,22 +165,50 @@ public class BlockChain {
         }
     }
 
-    public void toFile(@NotNull String fileName) throws FileNotFoundException {
+    public void toFile(String fileName) {
         if (fileName == null) throw new NullPointerException();
-        PrintWriter writer = new PrintWriter(fileName);
+        PrintWriter writer = null;
 
-        for (Block block : chain) {
-            writer.println(block.getIndex());
-            writer.println(block.getTimeStamp());
-            writer.println(block.getTransaction().getSender());
-            writer.println(block.getTransaction().getReceiver());
-            writer.println(block.getTransaction().getAmount());
-            writer.println(block.getNonce());
-            writer.println(block.getHash());
-            writer.flush();
+        try {
+            writer = new PrintWriter(fileName);
+
+            for (Block block : chain) {
+                writer.println(block.getIndex());
+                writer.println(block.getTimeStamp());
+                writer.println(block.getTransaction().getSender());
+                writer.println(block.getTransaction().getReceiver());
+                writer.println(block.getTransaction().getAmount());
+                writer.println(block.getNonce());
+                writer.println(block.getHash());
+                writer.flush();
+            }
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        } finally {
+            if (writer != null) {
+                writer.close();
+            }
         }
+    }
 
-        writer.close();
+    public void errorsToFile(String fileName) {
+        if (fileName == null) throw new NullPointerException();
+
+        PrintWriter writer = null;
+        try {
+            writer = new PrintWriter(appendToFileName(fileName, "error_log"));
+
+            for (String error : errorLogs) {
+                writer.println(error);
+                writer.flush();
+            }
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        } finally {
+            if (writer != null) {
+                writer.close();
+            }
+        }
     }
 
     public boolean validateBlockchain() {
@@ -207,7 +235,6 @@ public class BlockChain {
         return balances.get(username);
     }
 
-
     public void add(Block block) {
         // Block should have been validated before this but it's always better safe than sorry
         if (!block.validate(CRITERIA)) {
@@ -232,7 +259,177 @@ public class BlockChain {
         chain.add(block);
     }
 
-    private boolean assertBalance(String username, int amount) {
+    public static void main(String[] args) {
+        config();
+        int select;
+        boolean end = false;
+        String fileName = "";
+        Scanner scanner = new Scanner(System.in);
+        String[] options = new String[]{"Validate file with miner ID", "Read file and write new transactions",
+                "Get BlockChain Stats"};
+
+        makeMenu("BlockChain Program", options);
+
+
+        select = getUserNumSelection(":", 1, 3);
+
+        if (select == 4) {
+            System.out.println(GREETING);
+            return;
+        }
+
+
+        while (true) {
+            System.out.print("What is the name of the file? ");
+            fileName = scanner.next();
+            boolean choice;
+
+            if (new File(fileName).exists()) {
+                System.out.println("\nReading BlockChain from file...");
+                break;
+            }
+            else {
+                choice = getUserYesNo("The file does not exist, do you want to try again?");
+                if (!choice) {
+                    System.out.println(GREETING);
+                    return;
+                }
+            }
+        }
+
+        scanner.close();
+
+        BlockChain blockChain = BlockChain.fromFile(fileName);
+
+        System.out.println("Ensuring BlockChain validity...\n");
+
+
+        if (!blockChain.validateBlockchain()) {
+            System.out.println("BlockChain is not valid!\n\n");
+            System.out.println("Found the following errors: ");
+
+            for (String error : blockChain.errorLogs) {
+                System.out.println(error);
+            }
+
+            boolean choice = getUserYesNo("Write errors to file?");
+            if (choice) {
+                blockChain.errorsToFile(fileName);
+                System.out.println("Done!");
+            }
+            System.out.println(GREETING);
+            return;
+        }
+
+        System.out.println("BlockChain is valid!");
+
+        if (select == 1) {
+            System.out.println("Appending miner ID to valid blockchain file");
+            blockChain.toFile(appendToFileName(fileName, MINER_ID));
+            System.out.println("Done!");
+        } else if (select == 2) {
+            while (!end) {
+                end = addToChain(blockChain);
+            }
+            if (getUserYesNo("Write BlockChain to file?")) {
+                System.out.println("Saving to file...");
+                blockChain.toFile(appendToFileName(fileName, MINER_ID));
+                System.out.println("Done!");
+            }
+        } else {
+            int[] nonceVals = new int[blockChain.chain.size()-3];
+            int sum = 0;
+            for (int i = 0; i < blockChain.chain.size()-3; i++) {
+                int nonce = convertNonce(blockChain.chain.get(i+3).getNonce());
+                nonceVals[i] = nonce;
+                sum += nonce;
+            }
+
+            Arrays.sort(nonceVals);
+
+            System.out.println("Biggest nonce value: " + nonceVals[nonceVals.length-1]);
+            System.out.println("Smallest nonce value: " + nonceVals[0]);
+            System.out.println("Average nonce value: " + (int)((double) sum/nonceVals.length));
+        }
+
+        System.out.println(GREETING);
+    }
+
+    private static boolean addToChain(BlockChain blockChain) {
+        System.out.println("Starting new transaction...");
+        Scanner scanner = new Scanner(System.in);
+        String sender, receiver;
+        int amount;
+        boolean end;
+
+        while (true) {
+            System.out.print("Sender: ");
+            sender = scanner.next();
+            System.out.print("Receiver: ");
+            receiver = scanner.next();
+            System.out.print("Amount: ");
+            amount = scanner.nextInt();
+            if (amount < 1) {
+                System.out.println("Cannot send less than 1 bitcoin!");
+            } else if (!blockChain.assertBalance(sender, amount)) {
+                System.out.println("Sender cannot send more than they have!");
+                System.out.println("Sender balance: " + blockChain.getBalance(sender));
+            } else {
+                break;
+            }
+            System.out.println("Please try again");
+
+        }
+        Transaction transaction = new Transaction(sender, receiver, amount);
+        System.out.println("Adding transaction to a block...");
+        Block block = new Block(blockChain.getLastIndex() + 1, transaction, blockChain.getLastHash());
+
+        System.out.println("Generating valid nonce...");
+        if (!block.validate(CRITERIA)) {
+            System.out.println("Cannot validate block!");
+            System.out.println("Block not added to the chain");
+        } else {
+            System.out.println("Block validation completed!");
+            System.out.println("Block nonce: " + block.getNonce());
+            System.out.println("Block hash: " + block.getHash());
+            System.out.println("Adding block to BlockChain...");
+            blockChain.add(block);
+            System.out.println("Done!");
+        }
+
+        end = !getUserYesNo("Do you want to make a new transaction?");
+        scanner.close();
+        return end;
+
+    }
+
+    private static boolean getUserYesNo(String query) {
+        Scanner scanner = new Scanner(System.in);
+        String input;
+        while (true) {
+            System.out.print(query + "(y/n) ");
+            input = scanner.next();
+            if (input.equalsIgnoreCase("y") || input.equalsIgnoreCase("n")) {
+                scanner.close();
+                return input.equalsIgnoreCase("y");
+            } else System.out.println("Invalid input, try again");
+        }
+    }
+
+    private static int getUserNumSelection(String prompt, int smallest, int largest) {
+        Scanner scanner = new Scanner(System.in);
+        int choice;
+        while (true) {
+            System.out.print(prompt + " ");
+            choice = scanner.nextInt();
+            if (!(choice < smallest || choice > largest)){
+                break;
+            } else System.out.println("Invalid input, try again");
+        }
+        return choice;
+    }
+
+    public boolean assertBalance(String username, int amount) {
         return balances.getOrDefault(username, 0) >= amount || username.equals("bitcoin");
     }
 
@@ -264,178 +461,23 @@ public class BlockChain {
         return chain.get(getLastIndex()).getHash();
     }
 
-    public static void main(String[] args) {
-        config();
-
-        String input = new String();
-        Scanner scanner = new Scanner(System.in);
-
-        System.out.println("BlockChain Program");
-        System.out.println("==========================");
-        System.out.println();
-
-        while (!input.equalsIgnoreCase("yes")) {
-            System.out.print("Would you like to read a file? ");
-            input = scanner.nextLine();
-            if (input.equalsIgnoreCase("no")) {
-                System.out.println("Have a nice day");
-                return;
-            }
-            if (!input.equalsIgnoreCase("yes")) {
-                System.out.println("Please say yes or no");
-            }
+    private static void makeMenu(String title, String[] options) {
+        System.out.println(title);
+        System.out.println("==================================");
+        for (int i = 0; i < options.length; i++) {
+            System.out.printf("%d: %s\n", (i+1), options[i]);
         }
-
-        input = "";
-
-        while (true) {
-            String fileName;
-            while (true) {
-                System.out.print("What is the name of the file? ");
-                fileName = scanner.nextLine();
-                if (new File(fileName).exists()) {
-                    System.out.println("\nReading BlockChain from file...");
-                    break;
-                }
-                System.out.print("\nThis file does not exist, do you want to try again? If no, an empty BlockChain will be made ");
-                input = scanner.nextLine();
-                if (input.equalsIgnoreCase("no")) {
-                    System.out.println("Making an empty BlockChain...");
-                    break;
-                }
-            }
-
-            BlockChain blockChain = BlockChain.fromFile(fileName);
-
-            System.out.println("Ensuring BlockChain validity...\n");
-
-
-            if (!blockChain.validateBlockchain()) {
-                System.out.println("BlockChain is not valid!\n\n");
-                System.out.println("Found the following errors: ");
-
-                for (String error : blockChain.errorLogs) {
-                    System.out.println(error);
-                }
-
-                input = "";
-                while (!input.equalsIgnoreCase("yes")) {
-                    System.out.print("Do you want to try again? ");
-                    input = scanner.nextLine();
-                    if (input.equalsIgnoreCase("no")) {
-                        System.out.println("Have a nice day");
-                        return;
-                    }
-                    if (!input.equalsIgnoreCase("yes")) {
-                        System.out.println("Please say yes or no");
-                    }
-                }
-
-                input = "";
-
-                System.out.println("Trying one more time...");
-                continue;
-            }
-
-            System.out.println("BlockChain valid!");
-
-            input = getMakeNewTransaction(scanner, blockChain);
-            if (input == null) return;
-
-            input = "";
-
-            while (true) {
-                System.out.println("Starting new transaction...");
-                int amount;
-                String sender;
-                String receiver;
-                while (true) {
-                    try {
-                        System.out.print("Sender: ");
-                        sender = scanner.nextLine();
-                        System.out.print("Receiver: ");
-                        receiver = scanner.nextLine();
-                        System.out.print("Amount: ");
-                        amount = scanner.nextInt();
-                        if (!blockChain.assertBalance(sender, amount)) {
-                            System.out.println("Sender does not have enough bitcoin! Try again");
-                            continue;
-                        }
-                        if (amount < 1) {
-                            System.out.println("Must send at least 1 bitcoin!");
-                            continue;
-                        }
-                        break;
-                    } catch (Exception e) {
-                        System.out.println("Value needs to be an integer!");
-                    }
-                }
-
-                Transaction transaction = new Transaction(sender, receiver, amount);
-
-                System.out.println("Creating new block for this transaction...");
-
-                Block block = new Block(blockChain.getLastIndex() + 1, transaction, blockChain.getLastHash());
-
-                System.out.println("Generating a valid nonce for this block...");
-
-                if (block.validate(CRITERIA)) {
-                    System.out.println("Valid nonce found!");
-                }
-
-                System.out.println("Block nonce: " + block.getNonce());
-                System.out.println("Block hash: " + block.getHash());
-                System.out.println("Adding block to BlockChain...");
-                blockChain.add(block);
-
-                input = getMakeNewTransaction(scanner, blockChain);
-                if (input == null) return;
-            }
-
-        }
+        System.out.printf("%d: %s\n\n", options.length+1, "Exit");
     }
 
-    private static String getMakeNewTransaction(Scanner scanner, BlockChain blockChain) {
-        String input = "";
-        while (!input.equalsIgnoreCase("yes")) {
-            System.out.print("Would you like to add a new transaction to the BlockChain? ");
-            try {
-                Thread.sleep(100);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-            input = scanner.nextLine();
-            if (input.equalsIgnoreCase("no")) {
-                while (!input.equalsIgnoreCase("yes")) {
-                    System.out.print("Write this chain to file? ");
-                    input = scanner.nextLine();
-                    if (input.equalsIgnoreCase("no")) {
-                        System.out.println("Have a nice day");
-                        return null;
-                    }
-                    if (!input.equalsIgnoreCase("yes")) {
-                        System.out.println("Please say yes or no");
-                    }
-                }
-                String fileName;
-                while (true) {
-                    System.out.print("What should be the file name? ");
-                    fileName = scanner.nextLine();
-                    System.out.print("Writing blockchain to file... ");
-                    try {
-                        blockChain.toFile(fileName);
-                        System.out.println("File written!");
-                        System.out.println("Have a nice day");
-                        return null;
-                    } catch (FileNotFoundException e) {
-                        System.out.println("An error occurred, please try a different file name");
-                    }
-                }
-            }
-            if (!input.equalsIgnoreCase("yes")) {
-                System.out.println("Please say yes or no");
-            }
+    private static int convertNonce(String nonce) {
+        byte[] nonceBytes = nonce.getBytes();
+        int sum = 0;
+
+        for (int i = 0; i < nonceBytes.length; i++) {
+            sum += nonceBytes[i] * Math.pow(93, nonceBytes.length-1-i);
         }
-        return "";
+
+        return sum;
     }
 }

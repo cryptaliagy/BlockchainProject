@@ -8,6 +8,7 @@ public class Block {
     private String previousHash;
     private String hash;
     private Boolean isValid = null;
+    private int line = 0;
 
 
     public Block(int index, Transaction transaction, String previousHash) {

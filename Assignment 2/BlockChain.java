@@ -9,13 +9,41 @@ public class BlockChain {
     private Boolean isValid;
     private LinkedList<String> errorLogs = new LinkedList<>();
 
-    private static final boolean STOP_LOAD_IF_INVALID = false;
-    private static final String FIRST_HASH = "00000";
+    private static Properties properties = new Properties();
+
+    private static boolean STOP_LOAD_IF_INVALID;
+    private static String FIRST_HASH;
+    private static String CRITERIA;
 
     public BlockChain() {
         chain = new ArrayList<>();
         balances = new HashMap<>();
         isValid = null;
+    }
+
+    public static void config() {
+        InputStream reader = null;
+
+        try {
+            reader = new FileInputStream("blockchain.config");
+            properties.load(reader);
+            STOP_LOAD_IF_INVALID = Boolean.valueOf(properties.getProperty("stop_load"));
+            FIRST_HASH = properties.getProperty("first_hash");
+            CRITERIA = properties.getProperty("criteria");
+        }
+        catch (IOException e) {
+            e.printStackTrace();
+        }
+        finally {
+            if (reader != null) {
+                try {
+                    reader.close();
+                }
+                catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
     }
 
 
@@ -42,7 +70,8 @@ public class BlockChain {
                 String firstLine = buffer.readLine();
                 if (firstLine == null) { // Empty blockchain if empty file
                     buffer.close();
-                    if (chain.isValid != null && !chain.isValid) chain.chain = new ArrayList<>(); // flush arraylist if blockchain invalid
+                    if (chain.isValid != null && !chain.isValid)
+                        chain.chain = new ArrayList<>(); // flush arraylist if blockchain invalid
                     return chain;
                 }
 
@@ -107,10 +136,10 @@ public class BlockChain {
 
                 block = new Block(index, timeStamp, transaction, nonce, lastHash, hash);
 
-                if (!block.validate()) {
-                    if (!hash.startsWith("00000")) {
+                if (!block.validate(CRITERIA)) {
+                    if (!hash.startsWith(CRITERIA)) {
                         chain.errorLogs.add("Block validation error at index " + index + "!\n"
-                                + "Block hash must start with substring \"00000\"");
+                                + "Block hash must start with substring \"" + CRITERIA + "\"");
                     } else {
                         chain.errorLogs.add("Block validation error at index " + index + "!\n"
                                 + "Expected block hash: " + Sha1.hash(block.toString()) + "\n"
@@ -124,12 +153,14 @@ public class BlockChain {
                 }
 
                 chain.add(block);
-                lastHash = hash;
+                lastHash = Sha1.hash(block.toString());
                 lastIndex = index;
                 lastTime = timeStamp;
             } catch (Exception e) { // invalid blockchain
-                System.out.println(e.getMessage());
-                return null;
+                chain.errorLogs.add("Unknown parsing error occurred!\nAre you sure this file contains a blockchain?");
+                chain.chain = null;
+                chain.isValid = false;
+                return chain;
             }
         }
     }
@@ -158,7 +189,7 @@ public class BlockChain {
         }
 
         for (Block block : chain) {
-            if (!block.validate()) {
+            if (!block.validate(CRITERIA)) {
                 isValid = false;
             }
         }
@@ -179,8 +210,8 @@ public class BlockChain {
 
     public void add(Block block) {
         // Block should have been validated before this but it's always better safe than sorry
-        if (!block.validate()) {
-            return;
+        if (!block.validate(CRITERIA)) {
+            isValid = false;
         }
 
 
@@ -234,6 +265,8 @@ public class BlockChain {
     }
 
     public static void main(String[] args) {
+        config();
+
         String input = new String();
         Scanner scanner = new Scanner(System.in);
 
@@ -277,18 +310,14 @@ public class BlockChain {
             System.out.println("Ensuring BlockChain validity...\n");
 
 
-            if (blockChain == null || !blockChain.validateBlockchain()) {
+            if (!blockChain.validateBlockchain()) {
                 System.out.println("BlockChain is not valid!\n\n");
-                if (blockChain == null) {
-                    System.out.println("Unknown parsing error occurred!");
-                    System.out.println("Are you sure this file contains a blockchain?");
-                } else {
-                    System.out.println("Found the following errors: ");
+                System.out.println("Found the following errors: ");
 
-                    for (String error : blockChain.errorLogs) {
-                        System.out.println(error);
-                    }
+                for (String error : blockChain.errorLogs) {
+                    System.out.println(error);
                 }
+
                 input = "";
                 while (!input.equalsIgnoreCase("yes")) {
                     System.out.print("Do you want to try again? ");
@@ -350,7 +379,7 @@ public class BlockChain {
 
                 System.out.println("Generating a valid nonce for this block...");
 
-                if (block.validate()) {
+                if (block.validate(CRITERIA)) {
                     System.out.println("Valid nonce found!");
                 }
 
@@ -372,8 +401,7 @@ public class BlockChain {
             System.out.print("Would you like to add a new transaction to the BlockChain? ");
             try {
                 Thread.sleep(100);
-            }
-            catch (InterruptedException e) {
+            } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
             input = scanner.nextLine();
